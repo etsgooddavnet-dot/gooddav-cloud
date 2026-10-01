@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>GOOD DAV NET CLOUD V2 - GitHub Storage</title>
+<style>
+*{box-sizing:border-box;font-family:Arial}body{margin:0;background:#060a12;color:#fff;min-height:100vh}
+.top{background:#000;border-bottom:3px solid #FFD600;padding:12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.logo{color:#FFD600;font-weight:900;font-size:18px}
+.btn{padding:8px 14px;border-radius:7px;font-weight:900;cursor:pointer;border:2px solid #000;font-size:11px;margin:2px}
+.gold{background:#FFD600;color:#000}.green{background:#16a34a;color:#fff}.red{background:#dc2626;color:#fff}.blue{background:#2563eb;color:#fff}.black{background:#111;color:#FFD600;border-color:#FFD600}
+.card{background:#0f172a;border:2px solid #FFD600;border-radius:12px;padding:12px;margin:10px}
+input,select{width:100%;padding:10px;background:#000;border:2px solid #334155;border-radius:7px;color:#fff;font-weight:700;margin-top:4px}
+.field{margin-top:8px}.field label{font-size:10px;font-weight:900;color:#FFD600;display:block}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:10px}
+.fileCard{background:#101a2f;border:2px solid #334155;border-radius:10px;padding:10px;text-align:center;cursor:pointer}
+.fileCard:hover{border-color:#FFD600}
+.fileIcon{font-size:36px}
+.fileName{font-size:10px;font-weight:800;word-break:break-all;margin-top:4px;height:32px;overflow:hidden}
+.fileSize{font-size:9px;color:#94a3b8}
+.drop{border:3px dashed #FFD600;border-radius:12px;padding:20px;text-align:center;margin:10px;cursor:pointer;background:rgba(255,214,0,0.05)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:9999;display:none;align-items:center;justify-content:center;padding:10px}
+.box{background:#0f172a;border:3px solid #FFD600;border-radius:12px;padding:12px;width:100%;max-width:500px}
+.badge{background:#FFD600;color:#000;padding:2px 6px;border-radius:10px;font-size:9px;font-weight:900}
+</style>
+</head>
+<body>
+<div class="top">
+<div class="logo">☁️ GOOD DAV NET CLOUD V2<br><small style="font-size:10px;color:#fff">STOCKAGE RÉEL GITHUB - ILLIMITÉ</small></div>
+<div><button class="btn black" onclick="openSettings()">⚙️ CONFIG GITHUB</button><button class="btn gold" onclick="loadFiles()">🔄 ACTUALISER</button></div>
+</div>
+
+<div id="setupCard" class="card" style="border-color:#ef4444">
+<h3 style="color:#ef4444;margin:4px">🔐 Configuration requise 1 fois</h3>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+<div class="field"><label>GITHUB USERNAME (ton pseudo)</label><input id="ghUser" placeholder="ex: gooddav"></div>
+<div class="field"><label>NOM DU REPO (où stocker)</label><input id="ghRepo" placeholder="ex: gooddav-cloud-storage" value="gooddav-cloud-storage"></div>
+<div class="field"><label>TOKEN GITHUB (PAT)</label><input id="ghToken" type="password" placeholder="ghp_xxxx..."><small style="color:#94a3b8">Va sur github.com/settings/tokens → Generate new token (classic) → coche repo → génère</small></div>
+<div class="field"><label>DOSSIER DANS REPO</label><input id="ghPath" placeholder="ex: fichiers" value="cloud"><small style="color:#94a3b8">Laisse vide pour racine</small></div>
+</div>
+<div style="margin-top:8px"><button class="btn green" onclick="saveSettings()">💾 SAUVEGARDER & CONNECTER</button><span id="connStatus" style="margin-left:10px;font-weight:900"></span></div>
+<div style="margin-top:8px;background:#000;padding:8px;border-radius:6px;font-size:10px;color:#94a3b8">
+<b style="color:#FFD600">Comment créer le token en 30s:</b><br>1. Va sur <b>github.com/settings/tokens</b> → Generate new token (classic)<br>2. Note: GOOD DAV CLOUD → Expiration: No expiration → Coche <b>repo</b> → Generate<br>3. Copie le token qui commence par ghp_ → colle ici
+</div>
+</div>
+
+<div class="card">
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap"><div><span id="pathInfo" style="color:#FFD600;font-weight:900">📁 / cloud</span> <span id="countInfo" style="color:#94a3b8;font-size:11px"></span></div><div><input id="search" placeholder="🔍 Recherche..." style="width:180px;display:inline-block;padding:6px" oninput="filterFiles()"></div></div>
+<div class="drop" id="dropZone" onclick="document.getElementById('upInput').click()"><h3 style="color:#FFD600;margin:4px">📤 CLIQUE OU GLISSE FICHIERS ICI - TOUT FORMAT</h3><small style="color:#94a3b8">HTML, ZIP, EXE, MP3, MP4, JPG, PDF, logiciels... Stockage réel GitHub illimité</small><input type="file" id="upInput" multiple style="display:none"></div>
+<div class="grid" id="fileGrid"></div>
+<div id="log" style="margin-top:10px;padding:8px;background:#000;border-radius:6px;font-size:10px;color:#22c55e"></div>
+</div>
+
+<div id="previewModal" class="modal"><div class="box"><div style="display:flex;justify-content:space-between"><h3 id="prevTitle" style="color:#FFD600;font-size:12px"></h3><button class="btn red" onclick="closeModal('previewModal')">X</button></div><div id="prevBody"></div><div style="text-align:center;margin-top:10px"><button class="btn gold" id="btnDownload">⬇️ TÉLÉCHARGER</button><button class="btn red" id="btnDelete">🗑️ SUPPRIMER DE GITHUB</button></div></div></div>
+
+<script>
+let cfg=JSON.parse(localStorage.getItem('gooddav_gh_cfg')||'null')||{user:'',repo:'gooddav-cloud-storage',token:'',path:'cloud'};
+document.getElementById('ghUser').value=cfg.user; document.getElementById('ghRepo').value=cfg.repo; document.getElementById('ghToken').value=cfg.token; document.getElementById('ghPath').value=cfg.path;
+let filesCache=[]; let currentPreview=null;
+
+function saveSettings(){
+cfg.user=document.getElementById('ghUser').value.trim();
+cfg.repo=document.getElementById('ghRepo').value.trim()||'gooddav-cloud-storage';
+cfg.token=document.getElementById('ghToken').value.trim();
+cfg.path=document.getElementById('ghPath').value.trim();
+if(!cfg.user||!cfg.repo||!cfg.token){alert('Remplis username, repo, token'); return;}
+localStorage.setItem('gooddav_gh_cfg', JSON.stringify(cfg));
+document.getElementById('connStatus').textContent='✅ Sauvegardé - Test connexion...';
+testConnection();
+}
+function openSettings(){document.getElementById('setupCard').style.display='block';}
+async function testConnection(){
+try{
+let res=await fetch(`https://api.github.com/repos/${cfg.user}/${cfg.repo}`,{headers:{Authorization:`token ${cfg.token}`}});
+if(res.status===404){
+document.getElementById('connStatus').textContent='Repo inexistant - Création auto...';
+await createRepo();
+} else if(res.ok){
+document.getElementById('connStatus').textContent='✅ Connecté à '+cfg.repo;
+document.getElementById('setupCard').style.display='none';
+loadFiles();
+} else {
+let t=await res.text(); document.getElementById('connStatus').textContent='❌ Erreur: '+res.status+' '+t.slice(0,100);
+}
+} catch(e){document.getElementById('connStatus').textContent='❌ '+e.message;}
+}
+async function createRepo(){
+try{
+let res=await fetch('https://api.github.com/user/repos',{method:'POST',headers:{Authorization:`token ${cfg.token}`,'Content-Type':'application/json'},body:JSON.stringify({name:cfg.repo,private:true,description:'GOOD DAV NET CLOUD STORAGE'})});
+if(res.ok){document.getElementById('connStatus').textContent='✅ Repo créé!'; setTimeout(()=>{document.getElementById('setupCard').style.display='none'; loadFiles();},1000);} else {document.getElementById('connStatus').textContent='❌ Création repo échouée - Crée manuellement sur github.com';}
+} catch(e){document.getElementById('connStatus').textContent='❌ '+e.message;}
+}
+
+async function loadFiles(){
+if(!cfg.token) {document.getElementById('setupCard').style.display='block'; return;}
+let path=cfg.path?`/contents/${cfg.path}`:'/contents';
+document.getElementById('log').textContent='⏳ Chargement fichiers depuis GitHub...';
+try{
+let res=await fetch(`https://api.github.com/repos/${cfg.user}/${cfg.repo}${path}`,{headers:{Authorization:`token ${cfg.token}`}});
+if(res.status===404){document.getElementById('log').textContent='📁 Dossier vide - Upload ton premier fichier'; filesCache=[]; renderFiles([]); return;}
+let data=await res.json();
+if(!Array.isArray(data)){document.getElementById('log').textContent='Erreur: '+JSON.stringify(data).slice(0,200); return;}
+filesCache=data.filter(f=>f.type==='file');
+document.getElementById('log').textContent=`✅ ${filesCache.length} fichiers chargés depuis GitHub - Stockage réel`;
+renderFiles(filesCache);
+} catch(e){document.getElementById('log').textContent='❌ '+e.message;}
+}
+function renderFiles(list=filesCache){
+let grid=document.getElementById('fileGrid'); grid.innerHTML='';
+let q=document.getElementById('search').value.toLowerCase();
+let filtered=list.filter(f=>!q||f.name.toLowerCase().includes(q));
+document.getElementById('countInfo').textContent=`(${filtered.length} fichiers)`;
+document.getElementById('pathInfo').textContent=`📁 / ${cfg.path||'racine'} - GOOD DAV NET`;
+filtered.forEach(f=>{
+let card=document.createElement('div'); card.className='fileCard';
+let icon='📄'; if(f.name.match(/\.(jpg|png|jpeg|gif|webp)$/i)) icon='🖼️'; else if(f.name.match(/\.(mp3|wav|m4a)$/i)) icon='🎵'; else if(f.name.match(/\.(mp4|avi|mov)$/i)) icon='🎬'; else if(f.name.match(/\.(zip|rar)$/i)) icon='📦'; else if(f.name.match(/\.html$/i)) icon='🌐'; else if(f.name.match(/\.(exe|apk)$/i)) icon='💿';
+card.innerHTML=`<div class="fileIcon">${icon}</div><div class="fileName">${f.name}</div><div class="fileSize">${(f.size/1024).toFixed(1)} Ko</div><span class="badge">GitHub</span>`;
+card.onclick=()=>openFile(f);
+grid.appendChild(card);
+});
+}
+function filterFiles(){renderFiles();}
+
+async function openFile(f){
+currentPreview=f;
+document.getElementById('prevTitle').textContent=f.name;
+let body=document.getElementById('prevBody'); body.innerHTML='⏳ Chargement aperçu...';
+document.getElementById('previewModal').style.display='flex';
+let rawUrl=f.download_url;
+if(f.name.match(/\.(jpg|png|jpeg|gif|webp)$/i)){
+body.innerHTML=`<img src="${rawUrl}" style="width:100%;border-radius:8px;border:2px solid #FFD600">`;
+} else if(f.name.match(/\.(mp3|wav|m4a|ogg)$/i)){
+body.innerHTML=`<audio controls src="${rawUrl}" style="width:100%"></audio>`;
+} else if(f.name.match(/\.(mp4|webm|mov)$/i)){
+body.innerHTML=`<video controls src="${rawUrl}" style="width:100%;border-radius:8px"></video>`;
+} else if(f.name.match(/\.html$/i)){
+body.innerHTML=`<iframe src="${rawUrl}" style="width:100%;height:300px;background:#fff;border-radius:8px"></iframe><br><small style="color:#94a3b8">HTML hébergé sur GitHub</small>`;
+} else {
+body.innerHTML=`<div style="text-align:center;padding:20px"><div style="font-size:50px">📄</div><p>${f.name}<br>${(f.size/1024).toFixed(1)} Ko<br>Stocké sur GitHub</p></div>`;
+}
+document.getElementById('btnDownload').onclick=()=>{window.open(rawUrl,'_blank');};
+document.getElementById('btnDelete').onclick=()=>deleteFile(f);
+}
+
+async function deleteFile(f){
+if(!confirm('Supprimer définitivement '+f.name+' de GitHub?')) return;
+try{
+let res=await fetch(`https://api.github.com/repos/${cfg.user}/${cfg.repo}/contents/${f.path}`,{method:'DELETE',headers:{Authorization:`token ${cfg.token}`,'Content-Type':'application/json'},body:JSON.stringify({message:'Delete '+f.name+' via GOOD DAV NET CLOUD',sha:f.sha})});
+if(res.ok){document.getElementById('log').textContent='🗑️ Supprimé: '+f.name; closeModal('previewModal'); loadFiles();} else {alert('Erreur suppression: '+await res.text());}
+} catch(e){alert(e.message);}
+}
+
+function toBase64(file){
+return new Promise((resolve,reject)=>{
+let reader=new FileReader();
+reader.onload=()=>{let b64=reader.result.split(',')[1]; resolve(b64);};
+reader.onerror=reject;
+reader.readAsDataURL(file);
+});
+}
+
+async function uploadFile(file){
+let b64=await toBase64(file);
+let path=cfg.path?`${cfg.path}/${file.name}`:file.name;
+document.getElementById('log').textContent='⏳ Upload '+file.name+' vers GitHub...';
+// check if exists to get sha
+let sha=null;
+try{
+let check=await fetch(`https://api.github.com/repos/${cfg.user}/${cfg.repo}/contents/${path}`,{headers:{Authorization:`token ${cfg.token}`}});
+if(check.ok){let j=await check.json(); sha=j.sha;}
+} catch(e){}
+let body={message:`Upload ${file.name} via GOOD DAV NET CLOUD`,content:b64};
+if(sha) body.sha=sha;
+let res=await fetch(`https://api.github.com/repos/${cfg.user}/${cfg.repo}/contents/${path}`,{method:'PUT',headers:{Authorization:`token ${cfg.token}`,'Content-Type':'application/json'},body:JSON.stringify(body)});
+if(!res.ok){let t=await res.text(); throw new Error(t.slice(0,300));}
+return true;
+}
+
+async function handleUpload(files){
+for(let file of files){
+try{
+document.getElementById('log').textContent='⏳ Upload '+file.name+'...';
+await uploadFile(file);
+document.getElementById('log').textContent='✅ Upload OK: '+file.name;
+} catch(e){document.getElementById('log').textContent='❌ Erreur '+file.name+': '+e.message; alert('Erreur upload '+file.name+': '+e.message); return;}
+}
+loadFiles();
+}
+
+document.getElementById('upInput').addEventListener('change', e=>handleUpload(e.target.files));
+let dz=document.getElementById('dropZone');
+dz.addEventListener('dragover', e=>{e.preventDefault(); dz.style.background='rgba(255,214,0,0.2)';});
+dz.addEventListener('dragleave', ()=>dz.style.background='rgba(255,214,0,0.05)');
+dz.addEventListener('drop', e=>{e.preventDefault(); dz.style.background='rgba(255,214,0,0.05)'; handleUpload(e.dataTransfer.files);});
+function closeModal(id){document.getElementById(id).style.display='none';}
+
+// auto load if cfg exists
+if(cfg.token) {testConnection();}
+</script>
+</body>
+</html>
